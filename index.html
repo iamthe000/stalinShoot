@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>スターリンシュート-失敗政策を隠蔽せよ！</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon192x192.png">
+    <link rel="icon" href="icon192x192.png">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
     <style>
         /* --- 基本設定 --- */
         html, body {
