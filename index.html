@@ -9,31 +9,73 @@
         html, body {
             margin: 0;
             padding: 0;
-            overflow: hidden; /* スクロールバー禁止 (スマホ対応) */
+/*            overflow: hidden; /* スクロールバー禁止 (スマホ対応) */
             height: 100%;
             touch-action: none; /* ブラウザのタッチ操作を無効化 (スマホ対応) */
         }
         body {
             font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
             text-align: center;
-            background-color: #330000; /* 暗い赤背景 */
-            color: #FFDDDD; /* 薄い赤文字 */
+            background-color: #330000;
+            color: #FFDDDD;
+            padding: 10px;
+            box-sizing: border-box;
         }
+        
         h1 {
-            color: #FF5555; /* 明るい赤 */
+            color: #FF5555;
             text-shadow: 2px 2px 4px #000;
             margin: 10px 0;
+            font-size: 24px; /* スマホ用に小さく */
+        }
+        
+        @media (min-width: 768px) {
+            h1 {
+                font-size: 32px; /* PCではより大きく */
+            }
+        }
+
+        /* 操作説明 */
+        .instructions {
+            background-color: rgba(50, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px auto;
+            max-width: 600px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .instructions h2 {
+            color: #FF5555;
+            font-size: 18px;
+            margin: 0 0 10px 0;
+        }
+        
+        .instructions ul {
+            text-align: left;
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 5px;
         }
 
         /* --- ゲームコンテナとキャンバス --- */
         #game-container {
             position: relative;
-            /* サイズはJSでCanvasに合わせる */
-            width: 800px;
-            height: 600px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            aspect-ratio: 4/3;
+            margin: 10px auto;
         }
         canvas {
+            width: 100%;
+            height: 100%;
+            max-height: 80vh;
+            object-fit: contain;
             background-color: #660000; /* 赤いゲーム背景 */
             border: 3px solid #FF5555; /* 明るい赤の枠 */
             display: block;
@@ -79,17 +121,70 @@
             margin-top: 5px;
             color: #FFDDDD;
         }
+
+        /* 発射ボタン */
+        #shoot-button {
+            display: none; /* デフォルトは非表示（PC用） */
+            width: 120px;
+            height: 120px;
+            border-radius: 60px;
+            background-color: #FF3333;
+            color: white;
+            border: none;
+            font-size: 20px;
+            margin: 20px auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            -webkit-tap-highlight-color: transparent; /* タップ時の青い背景を消す */
+        }
+
+        #shoot-button:active {
+            background-color: #CC0000;
+            transform: scale(0.95);
+        }
+
+        /* スマホ表示時のみ発射ボタンを表示 */
+        @media (max-width: 768px) {
+            #shoot-button {
+                display: block;
+            }
+            
+            /* 説明文を小さく */
+            .instructions {
+                font-size: 12px;
+                padding: 10px;
+            }
+            
+            .instructions h2 {
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body>
 
     <h1>スターリンシュート-失敗政策を隠蔽せよ！</h1>
+    
+    <div class="instructions">
+        <h2>操作方法</h2>
+        <ul>
+            <li>PC: 左右矢印キーまたはA/Dキーで移動、スペースで発射</li>
+            <li>スマートフォン: 画面上部をタッチで左右移動、下部をタッチで発射</li>
+        </ul>
+        <h2>ゲーム説明</h2>
+        <ul>
+            <li>失敗政策を打ち消して60秒間生き残れ！</li>
+            <li>政策が下に到達したり、自分に当たるとゲームオーバー</li>
+            <li>60秒耐えると最終BOSSが出現！</li>
+        </ul>
+    </div>
+
     <div id="game-container">
         <canvas id="gameCanvas"></canvas>
         <div id="overlay"></div>
     </div>
     <button id="start-button">ゲーム開始</button>
     <div id="score">耐久時間: 60.0秒</div>
+    <button id="shoot-button">発射</button>
 
     <audio id="bgm" src="bgm.ogg" loop></audio>
     <audio id="end-bgm" src="bgm.ogg"></audio>
@@ -146,6 +241,10 @@
         const overlay = document.getElementById('overlay');
         const gameContainer = document.getElementById('game-container');
 
+        // グローバル変数に追加
+        let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        let shootButton;
+
         // --- 初期化 ---
         window.onload = () => {
             canvas = document.getElementById('gameCanvas');
@@ -172,6 +271,14 @@
             
             // スマホ操作用のイベントリスナー
             setupTouchControls();
+
+            shootButton = document.getElementById('shoot-button');
+            if (isMobile) {
+                shootButton.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (gameRunning) shoot();
+                });
+            }
         };
 
         // --- ゲーム開始 ---
@@ -247,15 +354,9 @@
             const relativeY = touch.clientY - canvasRect.top;
             const relativeX = touch.clientX - canvasRect.left;
 
-            // 画面下部 (Yが80%より下) をタップしたら発射
-            if (relativeY > CANVAS_HEIGHT * SHOOT_AREA_Y_RATIO) {
-                touchMode = 'shoot';
-                shoot();
-            } else {
-            // それ以外（上部）は移動
-                touchMode = 'move';
-                updatePlayerPosition(relativeX);
-            }
+            // タッチ操作は移動のみに変更（発射は専用ボタンで行う）
+            touchMode = 'move';
+            updatePlayerPosition(relativeX);
         }
 
         function handleTouchMove(e) {
@@ -519,6 +620,10 @@
             startButton.style.display = 'block';
             document.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('keyup', handleKeyUp);
+
+            if (isMobile) {
+                shootButton.style.display = 'none';
+            }
         }
 
         function gameOver(message) {
