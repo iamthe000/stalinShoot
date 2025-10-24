@@ -9,9 +9,9 @@
         html, body {
             margin: 0;
             padding: 0;
-/*            overflow: hidden; /* スクロールバー禁止 (スマホ対応) */
-            height: 100%;
-            touch-action: none; /* ブラウザのタッチ操作を無効化 (スマホ対応) */
+/* overflow: hidden; /* スクロールバー禁止 (スマホ対応) */
+            height: auto; /* 100%から変更 */
+            /* touch-action: none; を削除 */
         }
         body {
             font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
@@ -20,6 +20,9 @@
             color: #FFDDDD;
             padding: 10px;
             box-sizing: border-box;
+            min-height: 100vh; /* コンテンツが少なくても高さを確保 */
+            overflow-y: auto; /* 縦スクロールを許可 */
+            touch-action: auto; /* スクロール操作を許可 */
         }
         
         h1 {
@@ -83,6 +86,7 @@
             max-width: 100%; /* スマホでの画面はみ出し防止 */
             max-height: 80vh; /* スマホで縦にはみ出さないように調整 */
             box-sizing: border-box; /* borderを含めたサイズ計算 */
+            touch-action: none; /* キャンバス上でのみタッチ操作を無効化 (移動) */
         }
 
         /* --- UI要素 --- */
@@ -168,7 +172,7 @@
         <h2>操作方法</h2>
         <ul>
             <li>PC: 左右矢印キーまたはA/Dキーで移動、スペースで発射</li>
-            <li>スマートフォン: 画面上部をタッチで左右移動、下部をタッチで発射</li>
+            <li>スマートフォン: ゲーム画面をタッチ/スライドして左右移動、「発射」ボタンで発射</li>
         </ul>
         <h2>ゲーム説明</h2>
         <ul>
@@ -252,9 +256,12 @@
             canvas.width = CANVAS_WIDTH;
             canvas.height = CANVAS_HEIGHT;
             
+            // 修正箇所: JSによるコンテナの固定サイズ指定を削除
+            /*
             // コンテナのサイズもcanvasに合わせる
             gameContainer.style.width = `${CANVAS_WIDTH}px`;
             gameContainer.style.height = `${CANVAS_HEIGHT}px`;
+            */
 
             bgm = document.getElementById('bgm');
             endBgm = document.getElementById('end-bgm');
@@ -274,10 +281,15 @@
 
             shootButton = document.getElementById('shoot-button');
             if (isMobile) {
+                // 発射ボタンが確実に表示されるよう、CSSのメディアクエリに加えてJSでも制御
+                shootButton.style.display = 'block';
+                
                 shootButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
                     if (gameRunning) shoot();
                 });
+            } else {
+                 shootButton.style.display = 'none'; // PCでは明示的に非表示
             }
         };
 
@@ -302,6 +314,11 @@
             scoreDisplay.textContent = `耐久時間: ${GAME_DURATION_SEC.toFixed(1)}秒`;
             overlay.style.display = 'none';
             startButton.style.display = 'none';
+
+            // 修正箇所: スマホの場合、発射ボタンを再表示
+            if (isMobile) {
+                shootButton.style.display = 'block';
+            }
 
             // オーディオ再生
             endBgm.pause();
@@ -351,12 +368,16 @@
             e.preventDefault();
             
             const touch = e.touches[0];
-            const relativeY = touch.clientY - canvasRect.top;
+            
+            // 修正箇所: 座標のスケーリング
+            canvasRect = canvas.getBoundingClientRect(); // 座標計算の前に必ず再取得
+            const scaleX = CANVAS_WIDTH / canvasRect.width;
             const relativeX = touch.clientX - canvasRect.left;
+            const internalX = relativeX * scaleX;
 
             // タッチ操作は移動のみに変更（発射は専用ボタンで行う）
             touchMode = 'move';
-            updatePlayerPosition(relativeX);
+            updatePlayerPosition(internalX);
         }
 
         function handleTouchMove(e) {
@@ -364,8 +385,14 @@
             e.preventDefault();
             
             const touch = e.touches[0];
+            
+            // 修正箇所: 座標のスケーリング
+            canvasRect = canvas.getBoundingClientRect(); // 座標計算の前に必ず再取得
+            const scaleX = CANVAS_WIDTH / canvasRect.width;
             const relativeX = touch.clientX - canvasRect.left;
-            updatePlayerPosition(relativeX);
+            const internalX = relativeX * scaleX;
+            
+            updatePlayerPosition(internalX);
         }
 
         function handleTouchEnd(e) {
@@ -375,8 +402,8 @@
         }
 
         // プレイヤー位置更新 (タッチ操作)
-        function updatePlayerPosition(relativeX) {
-            player.x = relativeX - player.width / 2;
+        function updatePlayerPosition(internalX) { // 引数を internalX に変更
+            player.x = internalX - player.width / 2; // relativeX から internalX に変更
             // 境界チェック
             if (player.x < 0) player.x = 0;
             if (player.x > CANVAS_WIDTH - player.width) {
@@ -571,8 +598,8 @@
             if (playerImage.complete && playerImage.naturalWidth !== 0) {
                  ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
             } else {
-                ctx.fillStyle = 'silver'; // 代替色 (赤背景で目立つように)
-                ctx.fillRect(player.x, player.y, player.width, player.height);
+                 ctx.fillStyle = 'silver'; // 代替色 (赤背景で目立つように)
+                 ctx.fillRect(player.x, player.y, player.width, player.height);
             }
 
             // 弾描画
@@ -621,6 +648,7 @@
             document.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('keyup', handleKeyUp);
 
+            // 修正箇所: CSSのメディアクエリに表示を任せるか、startGameと対にする
             if (isMobile) {
                 shootButton.style.display = 'none';
             }
