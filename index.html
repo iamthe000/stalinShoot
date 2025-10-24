@@ -113,9 +113,9 @@
             width: 80%;
             box-sizing: border-box;
         }
-        #start-button {
-            font-size: 24px;
-            padding: 15px 30px;
+        #start-button, #bgm-toggle {
+            font-size: 20px;
+            padding: 10px 20px;
             cursor: pointer;
             background-color: #CC0000; /* 赤 */
             color: white;
@@ -123,9 +123,10 @@
             border-radius: 5px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             transition: background-color 0.3s;
-            margin-top: 10px;
+            margin: 5px; /* マージン調整 */
+            display: inline-block;
         }
-        #start-button:hover {
+        #start-button:hover, #bgm-toggle:hover {
             background-color: #AA0000; /* 濃い赤 */
         }
         #score { /* タイマー表示用 */
@@ -133,6 +134,13 @@
             margin-top: 5px;
             color: #FFDDDD;
         }
+        #bgm-toggle {
+            background-color: #007700; /* BGMボタンは緑 */
+        }
+        #bgm-toggle:hover {
+            background-color: #005500; /* 濃い緑 */
+        }
+
 
         /* 発射ボタン */
         #shoot-button {
@@ -195,6 +203,7 @@
         <div id="overlay"></div>
     </div>
     <button id="start-button">ゲーム開始</button>
+    <button id="bgm-toggle">BGM: ON</button>
     <div id="score">耐久時間: 60.0秒</div>
     <button id="shoot-button">発射</button>
 
@@ -242,6 +251,7 @@
         let playerImage;
         let bgm, endBgm;
         let animationFrameId;
+        let isBgmPlaying = true; // BGMの再生状態を管理するフラグ
 
         // --- スマホ操作用 ---
         let touchMode = 'none'; // 'move' or 'shoot'
@@ -252,6 +262,7 @@
         const scoreDisplay = document.getElementById('score');
         const overlay = document.getElementById('overlay');
         const gameContainer = document.getElementById('game-container');
+        const bgmToggle = document.getElementById('bgm-toggle'); // BGMトグルボタンを追加
 
         // グローバル変数に追加
         let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -264,13 +275,6 @@
             canvas.width = CANVAS_WIDTH;
             canvas.height = CANVAS_HEIGHT;
             
-            // 修正箇所: JSによるコンテナの固定サイズ指定を削除
-            /*
-            // コンテナのサイズもcanvasに合わせる
-            gameContainer.style.width = `${CANVAS_WIDTH}px`;
-            gameContainer.style.height = `${CANVAS_HEIGHT}px`;
-            */
-
             bgm = document.getElementById('bgm');
             endBgm = document.getElementById('end-bgm');
             
@@ -283,7 +287,8 @@
 
             scoreDisplay.textContent = `耐久時間: ${GAME_DURATION_SEC.toFixed(1)}秒`;
             startButton.addEventListener('click', startGame);
-            
+            bgmToggle.addEventListener('click', toggleBGM); // BGMトグルボタンのイベントリスナー
+
             // スマホ操作用のイベントリスナー
             setupTouchControls();
 
@@ -300,6 +305,20 @@
                  shootButton.style.display = 'none'; // PCでは明示的に非表示
             }
         };
+
+        // --- BGM ON/OFF切り替え ---
+        function toggleBGM() {
+            if (isBgmPlaying) {
+                bgm.pause();
+                isBgmPlaying = false;
+                bgmToggle.textContent = 'BGM: OFF';
+            } else {
+                // 再生を試みる (ユーザー操作なので再生可能)
+                bgm.play().catch(e => console.error("BGM再生エラー:", e)); 
+                isBgmPlaying = true;
+                bgmToggle.textContent = 'BGM: ON';
+            }
+        }
 
         // --- ゲーム開始 ---
         function startGame() {
@@ -321,9 +340,9 @@
             touchMode = 'none';
             scoreDisplay.textContent = `耐久時間: ${GAME_DURATION_SEC.toFixed(1)}秒`;
             overlay.style.display = 'none';
-            startButton.style.display = 'none';
+            startButton.style.display = 'block'; // startButtonは残すが、ゲーム中はリトライボタンとして機能
 
-            // 修正箇所: スマホの場合、発射ボタンを再表示
+            // スマホの場合、発射ボタンを再表示
             if (isMobile) {
                 shootButton.style.display = 'block';
             }
@@ -331,8 +350,13 @@
             // オーディオ再生
             endBgm.pause();
             endBgm.currentTime = 0;
-            bgm.currentTime = 0;
-            bgm.play().catch(e => console.error("BGM再生エラー:", e));
+            
+            // BGMがONの状態なら再生
+            if (isBgmPlaying) {
+                bgm.currentTime = 0;
+                bgm.play().catch(e => console.error("BGM再生エラー:", e));
+            }
+
 
             // キー入力リスナー
             document.addEventListener('keydown', handleKeyDown);
@@ -648,11 +672,11 @@
         function stopGame() {
             gameRunning = false;
             cancelAnimationFrame(animationFrameId);
-            bgm.pause();
+            bgm.pause(); // BGMを確実に停止
             endBgm.currentTime = 0;
             endBgm.play().catch(e => console.error("終了BGM再生エラー:", e));
             
-            startButton.style.display = 'block';
+            // startButton.style.display は startGameで制御しているためここでは不要
             document.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('keyup', handleKeyUp);
 
