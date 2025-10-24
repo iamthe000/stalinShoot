@@ -1,6 +1,6 @@
 {
-    "name": "PWA sample program",
-    "short_name": "PWA sample",
+    "name": "スターリンシュート",
+    "short_name": "スターリンシュート",
     "start_url": "index.html",
     "display": "standalone",
     "icons": [
