@@ -113,33 +113,13 @@
             width: 80%;
             box-sizing: border-box;
         }
-
-        /* ▼▼▼ 変更点: 難易度セレクターのスタイルを追加 ▼▼▼ */
-        #difficulty-selector {
-            margin: 10px auto;
-            font-size: 18px;
-            color: #FFDDDD;
-        }
-        #difficulty-selector label {
-            margin-right: 10px;
-        }
-        #difficulty-selector select {
-            font-size: 16px;
-            padding: 5px;
-            background-color: #CC0000;
-            color: white;
-            border: 1px solid #FF5555;
-            border-radius: 5px;
-        }
-        /* ▲▲▲ 変更点ここまで ▲▲▲ */
-
         #start-button, #bgm-toggle {
             font-size: 20px;
             padding: 10px 20px;
             cursor: pointer;
             background-color: #CC0000; /* 赤 */
             color: white;
-  g          border: none;
+            border: none;
             border-radius: 5px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
             transition: background-color 0.3s;
@@ -186,7 +166,7 @@
         @media (max-width: 768px) {
             #shoot-button {
                 display: block;
-          S   }
+            }
             
             /* 説明文を小さく */
             .instructions {
@@ -222,16 +202,7 @@
         <canvas id="gameCanvas"></canvas>
         <div id="overlay"></div>
     </div>
-    
-        <div id="difficulty-selector">
-        <label for="difficulty">難易度:</label>
-        <select id="difficulty">
-            <option value="easy">簡単 (粛清モード)</option>
-            <option value="normal" selected>普通 (計画経済)</option>
-            <option value="hard">困難 (ペレストロイカ)</option>
-        </select>
-    </div>
-        <button id="start-button">ゲーム開始</button>
+    <button id="start-button">ゲーム開始</button>
     <button id="bgm-toggle">BGM: ON</button>
     <div id="score">耐久時間: 60.0秒</div>
     <button id="shoot-button">発射</button>
@@ -249,10 +220,10 @@
         const BULLET_WIDTH = 5;
         const BULLET_HEIGHT = 15;
         const BULLET_SPEED = 10;
-        // const ENEMY_SPEED_MIN = 1.5; // ▼ 難易度設定へ移動
-        // const ENEMY_SPEED_MAX = 3.0; // ▼ 難易度設定へ移動
+        const ENEMY_SPEED_MIN = 1.5;
+        const ENEMY_SPEED_MAX = 3.0;
         const ENEMY_SPAWN_INTERVAL = 1000; // 敵の出現間隔 (ms) -- 基準値
-        // const ENEMY_HP = 3; // ▼ 難易度設定へ移動
+        const ENEMY_HP = 3; // 各政策のHP
         const MIN_SPAWN_INTERVAL = 200; // 出現間隔の下限 (ms)
         const GAME_DURATION_SEC = 60; // 勝利条件 (60秒耐久)
         const SHOOT_AREA_Y_RATIO = 0.8; // 画面下部80%以下をタップで発射
@@ -268,38 +239,9 @@
 
         // --- ボス設定 ---
         const BOSS_TEXT = "1991ソ連崩壊";
-        // const BOSS_HP = 10; // ▼ 難易度設定へ移動
+        const BOSS_HP = 10;
         const BOSS_FONT = 'bold 60px sans-serif';
         const BOSS_COLOR = '#FFFF00'; // 黄色
-
-        // ▼▼▼ 変更点: 難易度設定オブジェクトを新設 ▼▼▼
-        const DIFFICULTIES = {
-            'easy': {
-                enemyHp: 1, 
-                enemySpeedMin: 1.0,
-                enemySpeedMax: 2.0,
-                bossHp: 5,
-                spawnIntervalFactor: 0.4, // 最終的な出現間隔の短縮率 (40%)
-                spawnCountFactor: 1      // 最大同時出現数増加 (1 + 1 = 2)
-            },
-            'normal': {
-                enemyHp: 3,
-                enemySpeedMin: 1.5,
-                enemySpeedMax: 3.0,
-                bossHp: 10,
-                spawnIntervalFactor: 0.6, // (調整) 85% -> 60%
-                spawnCountFactor: 2      // (調整) 3 -> 2 (最大3体)
-            },
-            'hard': {
-                enemyHp: 5,
-                enemySpeedMin: 2.0,
-                enemySpeedMax: 4.0,
-                bossHp: 15,
-                spawnIntervalFactor: 0.85, // (元のコードの難易度)
-                spawnCountFactor: 3      // (元のコードの難易度: 最大4体)
-            }
-        };
-        // ▲▲▲ 変更点ここまで ▲▲▲
 
         // --- グローバル変数 ---
         let canvas, ctx;
@@ -311,12 +253,7 @@
         let playerImage;
         let bgm, endBgm;
         let animationFrameId;
-        let isBgmPlaying = true; 
-
-        // ▼▼▼ 変更点: 難易度設定用の変数を追加 ▼▼▼
-        let currentDifficulty = 'normal';
-        let difficultySettings;
-        // ▲▲▲ 変更点ここまで ▲▲▲
+        let isBgmPlaying = true; // BGMの再生状態を管理するフラグ
 
         // --- スマホ操作用 ---
         let touchMode = 'none'; // 'move' or 'shoot'
@@ -327,8 +264,7 @@
         const scoreDisplay = document.getElementById('score');
         const overlay = document.getElementById('overlay');
         const gameContainer = document.getElementById('game-container');
-        const bgmToggle = document.getElementById('bgm-toggle');
-        const difficultySelector = document.getElementById('difficulty'); // ▼ 変更点: 追加
+        const bgmToggle = document.getElementById('bgm-toggle'); // BGMトグルボタンを追加
 
         // グローバル変数に追加
         let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -353,7 +289,7 @@
 
             scoreDisplay.textContent = `耐久時間: ${GAME_DURATION_SEC.toFixed(1)}秒`;
             startButton.addEventListener('click', startGame);
-            bgmToggle.addEventListener('click', toggleBGM); 
+            bgmToggle.addEventListener('click', toggleBGM); // BGMトグルボタンのイベントリスナー
 
             // スマホ操作用のイベントリスナー
             setupTouchControls();
@@ -388,11 +324,6 @@
 
         // --- ゲーム開始 ---
         function startGame() {
-            // ▼▼▼ 変更点: 難易度設定を読み込む ▼▼▼
-            currentDifficulty = difficultySelector.value;
-            difficultySettings = DIFFICULTIES[currentDifficulty];
-            // ▲▲▲ 変更点ここまで ▲▲▲
-
             player = {
                 x: (CANVAS_WIDTH - PLAYER_WIDTH) / 2,
                 y: CANVAS_HEIGHT - PLAYER_HEIGHT - 10,
@@ -411,8 +342,7 @@
             touchMode = 'none';
             scoreDisplay.textContent = `耐久時間: ${GAME_DURATION_SEC.toFixed(1)}秒`;
             overlay.style.display = 'none';
-            startButton.style.display = 'block'; 
-            difficultySelector.style.display = 'none'; // ▼ 変更点: 難易度セレクターを非表示
+            startButton.style.display = 'block'; // startButtonは残すが、ゲーム中はリトライボタンとして機能
 
             // スマホの場合、発射ボタンを再表示
             if (isMobile) {
@@ -540,13 +470,11 @@
                 x: Math.random() * Math.max(0, CANVAS_WIDTH - textWidth),
                 y: -textHeight,
                 text: text,
-                // ▼▼▼ 変更点: 難易度設定を参照 ▼▼▼
-                speed: difficultySettings.enemySpeedMin + Math.random() * (difficultySettings.enemySpeedMax - difficultySettings.enemySpeedMin),
+                speed: ENEMY_SPEED_MIN + Math.random() * (ENEMY_SPEED_MAX - ENEMY_SPEED_MIN),
                 width: textWidth,
                 height: textHeight,
-                maxHp: difficultySettings.enemyHp,
-                hp: difficultySettings.enemyHp
-                // ▲▲▲ 変更点ここまで ▲▲▲
+                maxHp: ENEMY_HP,
+                hp: ENEMY_HP
             };
             enemies.push(enemy);
         }
@@ -598,7 +526,7 @@
 
         // 通常フェーズの更新 (敵 + タイマー)
         function updateEnemies(timestamp) {
-            // 敵の移動と当たり判定 (変更なし)
+            // 敵の移動と当たり判定
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 enemy.y += enemy.speed;
@@ -630,19 +558,13 @@
                 }
             }
 
-            // ▼▼▼ 変更点: 難易度設定を参照して出現ロジックを計算 ▼▼▼
+            // 出現間隔を経過時間に応じて短縮し、出現数を増やす
             const elapsedSec = (Date.now() - gameStartTime) / 1000;
             const progress = Math.min(1, elapsedSec / GAME_DURATION_SEC); // 0..1
-            
-            // 難易度設定からファクターを取得
-            const intervalFactor = difficultySettings.spawnIntervalFactor;
-            const countFactor = difficultySettings.spawnCountFactor;
-
-            // 出現間隔を計算 (例: normal 1000 * (1 - 0.6 * progress))
-            const spawnInterval = Math.max(MIN_SPAWN_INTERVAL, ENEMY_SPAWN_INTERVAL * (1 - intervalFactor * progress));
-            // 出現数を計算 (例: normal 1 + floor(progress * 2))
-            const spawnCount = 1 + Math.floor(progress * countFactor);
-            // ▲▲▲ 変更点ここまで ▲▲▲
+            // 出現間隔を最大で85%短縮する（進行度に応じて）
+            const spawnInterval = Math.max(MIN_SPAWN_INTERVAL, ENEMY_SPAWN_INTERVAL * (1 - 0.85 * progress));
+            // 出現数は最大で4体程度まで増加（進行度に応じて）
+            const spawnCount = 1 + Math.floor(progress * 3);
 
             if (timestamp - lastEnemySpawnTime > spawnInterval) {
                 spawnEnemies(spawnCount);
@@ -650,7 +572,7 @@
             }
         }
 
-        // タイマー更新 (変更なし)
+        // タイマー更新
         function updateTimer() {
             const elapsedTime = (Date.now() - gameStartTime) / 1000;
             const remainingTime = Math.max(0, GAME_DURATION_SEC - elapsedTime);
@@ -675,16 +597,14 @@
                 y: 100,
                 width: metrics.width,
                 height: 60, // フォントサイズ基準
-                // ▼▼▼ 変更点: 難易度設定を参照 ▼▼▼
-                hp: difficultySettings.bossHp,
-                maxHp: difficultySettings.bossHp,
-                // ▲▲▲ 変更点ここまで ▲▲▲
+                hp: BOSS_HP,
+                maxHp: BOSS_HP,
                 speedX: 2.5 // ボスの移動速度
             };
             scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
         }
 
-        // ボスフェーズの更新 (変更なし)
+        // ボスフェーズの更新
         function updateBoss() {
             if (!boss) return;
 
@@ -718,7 +638,7 @@
             }
         }
         
-        // 当たり判定 (AABB) (変更なし)
+        // 当たり判定 (AABB)
         function checkCollision(rect1, rect2) {
             return rect1.x < rect2.x + rect2.width &&
                    rect1.x + rect1.width > rect2.x &&
@@ -726,7 +646,7 @@
                    rect1.y + rect1.height > rect2.y;
         }
 
-        // --- 描画処理 --- (変更なし)
+        // --- 描画処理 ---
         function draw() {
             // 画面クリア
             ctx.fillStyle = '#660000'; // 赤い背景色
@@ -768,7 +688,7 @@
                 ctx.fillRect(bossBarX, bossBarY, bossBarW * bossRatio, bossBarH);
                 ctx.strokeStyle = '#000';
                 ctx.strokeRect(bossBarX, bossBarY, bossBarW, bossBarH);
-D         } else {
+            } else {
                 // 通常の敵描画
                 ctx.fillStyle = ENEMY_COLOR;
                 ctx.font = ENEMY_FONT;
@@ -794,7 +714,7 @@ D         } else {
             }
         }
 
-        // --- メインループ --- (変更なし)
+        // --- メインループ ---
         function gameLoop(timestamp) {
             if (!gameRunning) return; 
 
@@ -815,8 +735,6 @@ D         } else {
             // startButton.style.display は startGameで制御しているためここでは不要
             document.removeEventListener('keydown', handleKeyDown);
             document.removeEventListener('keyup', handleKeyUp);
-
-            difficultySelector.style.display = 'block'; // ▼ 変更点: 難易度セレクターを再表示
 
             // 修正箇所: CSSのメディアクエリに表示を任せるか、startGameと対にする
             if (isMobile) {
