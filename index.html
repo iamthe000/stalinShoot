@@ -222,7 +222,9 @@
         const BULLET_SPEED = 10;
         const ENEMY_SPEED_MIN = 1.5;
         const ENEMY_SPEED_MAX = 3.0;
-        const ENEMY_SPAWN_INTERVAL = 1000; // 敵の出現間隔 (ms)
+        const ENEMY_SPAWN_INTERVAL = 1000; // 敵の出現間隔 (ms) -- 基準値
+        const ENEMY_HP = 3; // 各政策のHP
+        const MIN_SPAWN_INTERVAL = 200; // 出現間隔の下限 (ms)
         const GAME_DURATION_SEC = 60; // 勝利条件 (60秒耐久)
         const SHOOT_AREA_Y_RATIO = 0.8; // 画面下部80%以下をタップで発射
 
@@ -456,6 +458,7 @@
         }
 
         // --- 敵生成 ---
+        // 単体の敵を生成してHPを付与
         function spawnEnemy() {
             const text = ENEMY_TEXTS[Math.floor(Math.random() * ENEMY_TEXTS.length)];
             ctx.font = ENEMY_FONT;
@@ -464,14 +467,23 @@
             const textHeight = 18; // フォントサイズ基準
             
             const enemy = {
-                x: Math.random() * (CANVAS_WIDTH - textWidth),
+                x: Math.random() * Math.max(0, CANVAS_WIDTH - textWidth),
                 y: -textHeight,
                 text: text,
                 speed: ENEMY_SPEED_MIN + Math.random() * (ENEMY_SPEED_MAX - ENEMY_SPEED_MIN),
                 width: textWidth,
-                height: textHeight
+                height: textHeight,
+                maxHp: ENEMY_HP,
+                hp: ENEMY_HP
             };
             enemies.push(enemy);
+        }
+
+        // 複数一度に生成（後半で数を増やすために使用）
+        function spawnEnemies(count) {
+            for (let i = 0; i < count; i++) {
+                spawnEnemy();
+            }
         }
 
         // --- 更新処理 (メイン) ---
@@ -529,20 +541,33 @@
                     gameOver("失敗！ 責任を問われた！");
                     return;
                 }
-                // 弾との当たり判定
+                // 弾との当たり判定（HPを減らす）
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
+                        // 弾を消す
                         bullets.splice(j, 1);
-                        enemies.splice(i, 1);
-                        // スコア制ではないのでスコア加算はしない
+                        // 敵のHPを減らす
+                        enemy.hp--;
+                        if (enemy.hp <= 0) {
+                            enemies.splice(i, 1);
+                        } else {
+                            // 生存している場合はそのまま残す（描画でHPバーが更新される）
+                        }
                         break; 
                     }
                 }
             }
 
-            // 敵の生成
-            if (timestamp - lastEnemySpawnTime > ENEMY_SPAWN_INTERVAL) {
-                spawnEnemy();
+            // 出現間隔を経過時間に応じて短縮し、出現数を増やす
+            const elapsedSec = (Date.now() - gameStartTime) / 1000;
+            const progress = Math.min(1, elapsedSec / GAME_DURATION_SEC); // 0..1
+            // 出現間隔を最大で85%短縮する（進行度に応じて）
+            const spawnInterval = Math.max(MIN_SPAWN_INTERVAL, ENEMY_SPAWN_INTERVAL * (1 - 0.85 * progress));
+            // 出現数は最大で4体程度まで増加（進行度に応じて）
+            const spawnCount = 1 + Math.floor(progress * 3);
+
+            if (timestamp - lastEnemySpawnTime > spawnInterval) {
+                spawnEnemies(spawnCount);
                 lastEnemySpawnTime = timestamp;
             }
         }
@@ -573,6 +598,7 @@
                 width: metrics.width,
                 height: 60, // フォントサイズ基準
                 hp: BOSS_HP,
+                maxHp: BOSS_HP,
                 speedX: 2.5 // ボスの移動速度
             };
             scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
@@ -640,13 +666,28 @@
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
             }
 
-            // 敵またはボスの描画
+            // 敵またはボスの描画（HPバー付き）
             if (bossPhase && boss) {
                 // ボス描画
                 ctx.fillStyle = BOSS_COLOR;
                 ctx.font = BOSS_FONT;
                 ctx.textBaseline = 'top';
                 ctx.fillText(boss.text, boss.x, boss.y);
+                // ボスHPバー
+                const bossBarW = boss.width;
+                const bossBarH = 12;
+                const bossBarX = boss.x;
+                let bossBarY = boss.y - bossBarH - 8;
+                if (bossBarY < 0) bossBarY = boss.y + boss.height + 8;
+                // 背景
+                ctx.fillStyle = '#330000';
+                ctx.fillRect(bossBarX, bossBarY, bossBarW, bossBarH);
+                // HP比率
+                const bossRatio = Math.max(0, boss.hp / boss.maxHp);
+                ctx.fillStyle = '#55FF55';
+                ctx.fillRect(bossBarX, bossBarY, bossBarW * bossRatio, bossBarH);
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(bossBarX, bossBarY, bossBarW, bossBarH);
             } else {
                 // 通常の敵描画
                 ctx.fillStyle = ENEMY_COLOR;
@@ -654,6 +695,21 @@
                 ctx.textBaseline = 'top';
                 for (const enemy of enemies) {
                     ctx.fillText(enemy.text, enemy.x, enemy.y);
+                    // HPバー（敵幅に合わせるが最小幅を確保）
+                    const barW = Math.max(30, enemy.width);
+                    const barH = 6;
+                    let barX = enemy.x;
+                    let barY = enemy.y - barH - 6;
+                    if (barY < 0) barY = enemy.y + enemy.height + 4;
+                    // 背景バー
+                    ctx.fillStyle = '#330000';
+                    ctx.fillRect(barX, barY, barW, barH);
+                    // 現在HPバー
+                    const ratio = Math.max(0, enemy.hp / enemy.maxHp);
+                    ctx.fillStyle = '#55FF55';
+                    ctx.fillRect(barX, barY, barW * ratio, barH);
+                    ctx.strokeStyle = '#000';
+                    ctx.strokeRect(barX, barY, barW, barH);
                 }
             }
         }
