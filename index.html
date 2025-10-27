@@ -172,6 +172,14 @@
             background-color: #AA0000;
         }
 
+        .difficulty-extreme {
+            background-color: #990066;
+        }
+
+        .difficulty-extreme:hover {
+            background-color: #660044;
+        }
+
         #start-button, #bgm-toggle, #back-button {
             font-size: 20px;
             padding: 10px 20px;
@@ -278,6 +286,9 @@
             <button class="difficulty-button difficulty-hard" data-difficulty="hard">
                 崩壊的難易度<br><span style="font-size: 14px;">（難しい - 激しい攻撃）</span>
             </button>
+            <button class="difficulty-button difficulty-extreme" data-difficulty="extreme">
+                8月クーデター的難易度<br><span style="font-size: 14px;">（超難 - 猛烈な攻撃）</span>
+            </button>
             <button id="back-button">戻る</button>
         </div>
     </div>
@@ -331,6 +342,15 @@
                 maxSpawnCount: 3,
                 intervalReduction: 0.8,
                 bossSpeed: 3.0
+            },
+            extreme: {
+                speedMin: 1.8,
+                speedMax: 3.0,
+                spawnInterval: 1000,
+                minSpawnInterval: 400,
+                maxSpawnCount: 4,
+                intervalReduction: 0.9,
+                bossSpeed: 4.0
             }
         };
 
@@ -345,7 +365,7 @@
 
         // --- ボス設定 ---
         const BOSS_TEXT = "1991ソ連崩壊";
-        const BOSS_HP = 10;
+        const BOSS_HP = 20;
         const BOSS_FONT = 'bold 60px sans-serif';
         const BOSS_COLOR = '#FFFF00';
 
@@ -640,6 +660,7 @@
         }
 
         function updateEnemies(timestamp) {
+            // 通常時の雑魚敵更新
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 enemy.y += enemy.speed;
@@ -664,18 +685,21 @@
                 }
             }
 
-            const settings = DIFFICULTY_SETTINGS[currentDifficulty];
-            const elapsedSec = (Date.now() - gameStartTime) / 1000;
-            const progress = Math.min(1, elapsedSec / GAME_DURATION_SEC);
-            const spawnInterval = Math.max(
-                settings.minSpawnInterval, 
-                settings.spawnInterval * (1 - settings.intervalReduction * progress)
-            );
-            const spawnCount = 1 + Math.floor(progress * (settings.maxSpawnCount - 1));
+            // 通常時の敵生成ロジック
+            if (!bossPhase) {
+                const settings = DIFFICULTY_SETTINGS[currentDifficulty];
+                const elapsedSec = (Date.now() - gameStartTime) / 1000;
+                const progress = Math.min(1, elapsedSec / GAME_DURATION_SEC);
+                const spawnInterval = Math.max(
+                    settings.minSpawnInterval, 
+                    settings.spawnInterval * (1 - settings.intervalReduction * progress)
+                );
+                const spawnCount = 1 + Math.floor(progress * (settings.maxSpawnCount - 1));
 
-            if (timestamp - lastEnemySpawnTime > spawnInterval) {
-                spawnEnemies(spawnCount);
-                lastEnemySpawnTime = timestamp;
+                if (timestamp - lastEnemySpawnTime > spawnInterval) {
+                    spawnEnemies(spawnCount);
+                    lastEnemySpawnTime = timestamp;
+                }
             }
         }
 
@@ -691,7 +715,7 @@
 
         function enterBossPhase() {
             bossPhase = true;
-            enemies = [];
+            enemies = []; // 通常の敵をクリア
             scoreDisplay.textContent = "ラスボス出現！";
             
             const settings = DIFFICULTY_SETTINGS[currentDifficulty];
@@ -713,17 +737,64 @@
         function updateBoss() {
             if (!boss) return;
 
+            // ボス本体の移動
             boss.x += boss.speedX;
             if (boss.x < 0 || boss.x + boss.width > CANVAS_WIDTH) {
                 boss.speedX *= -1;
                 boss.x = Math.max(0, Math.min(boss.x, CANVAS_WIDTH - boss.width));
             }
 
+            // ボスが生存中、ランダムに「共和国離反」を生成
+            if (Math.random() < 0.03) { // 3%の確率で生成
+                const text = "共和国離反";
+                ctx.font = ENEMY_FONT;
+                const metrics = ctx.measureText(text);
+                const enemy = {
+                    x: Math.random() * (CANVAS_WIDTH - metrics.width),
+                    y: -30,
+                    text: text,
+                    speed: 3,
+                    width: metrics.width,
+                    height: 18,
+                    maxHp: 1,
+                    hp: 1
+                };
+                enemies.push(enemy); // enemies 配列に追加
+            }
+
+            // ボスフェーズ中の雑魚敵（共和国離反）の更新処理
+            // updateEnemies() を流用すると通常時の敵生成ロジックが動いてしまうため、
+            // 雑魚敵の更新部分だけを別途実行する
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.y += enemy.speed;
+                if (enemy.y > CANVAS_HEIGHT) {
+                    gameOver("失敗！ 政策が露見した！");
+                    return;
+                }
+                if (checkCollision(player, enemy)) {
+                    gameOver("失敗！ 責任を問われた！");
+                    return;
+                }
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    if (checkCollision(bullets[j], enemy)) {
+                        bullets.splice(j, 1);
+                        enemy.hp--;
+                        if (enemy.hp <= 0) {
+                            enemies.splice(i, 1);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // ボスとプレイヤーの当たり判定
             if (checkCollision(player, boss)) {
                 gameOver("失敗！ 崩壊に巻き込まれた！");
                 return;
             }
 
+            // ボスと弾の当たり判定
             for (let j = bullets.length - 1; j >= 0; j--) {
                 if (checkCollision(bullets[j], boss)) {
                     bullets.splice(j, 1);
@@ -752,6 +823,7 @@
             ctx.fillStyle = '#660000';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+            // プレイヤー描画
             if (playerImage.complete && playerImage.naturalWidth !== 0) {
                 ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
             } else {
@@ -759,11 +831,34 @@
                 ctx.fillRect(player.x, player.y, player.width, player.height);
             }
 
+            // 弾描画
             ctx.fillStyle = '#FFFF00';
             for (const bullet of bullets) {
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
             }
 
+            // --- ★修正箇所 ---
+            // 雑魚敵の描画 (通常時もボスフェーズ時も実行)
+            ctx.fillStyle = ENEMY_COLOR;
+            ctx.font = ENEMY_FONT;
+            ctx.textBaseline = 'top';
+            for (const enemy of enemies) {
+                ctx.fillText(enemy.text, enemy.x, enemy.y);
+                const barW = Math.max(30, enemy.width);
+                const barH = 6;
+                let barX = enemy.x;
+                let barY = enemy.y - barH - 6;
+                if (barY < 0) barY = enemy.y + enemy.height + 4;
+                ctx.fillStyle = '#330000';
+                ctx.fillRect(barX, barY, barW, barH);
+                const ratio = Math.max(0, enemy.hp / enemy.maxHp);
+                ctx.fillStyle = '#55FF55';
+                ctx.fillRect(barX, barY, barW * ratio, barH);
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(barX, barY, barW, barH);
+            }
+
+            // ボスの描画 (ボスフェーズ中のみ実行)
             if (bossPhase && boss) {
                 ctx.fillStyle = BOSS_COLOR;
                 ctx.font = BOSS_FONT;
@@ -781,26 +876,8 @@
                 ctx.fillRect(bossBarX, bossBarY, bossBarW * bossRatio, bossBarH);
                 ctx.strokeStyle = '#000';
                 ctx.strokeRect(bossBarX, bossBarY, bossBarW, bossBarH);
-            } else {
-                ctx.fillStyle = ENEMY_COLOR;
-                ctx.font = ENEMY_FONT;
-                ctx.textBaseline = 'top';
-                for (const enemy of enemies) {
-                    ctx.fillText(enemy.text, enemy.x, enemy.y);
-                    const barW = Math.max(30, enemy.width);
-                    const barH = 6;
-                    let barX = enemy.x;
-                    let barY = enemy.y - barH - 6;
-                    if (barY < 0) barY = enemy.y + enemy.height + 4;
-                    ctx.fillStyle = '#330000';
-                    ctx.fillRect(barX, barY, barW, barH);
-                    const ratio = Math.max(0, enemy.hp / enemy.maxHp);
-                    ctx.fillStyle = '#55FF55';
-                    ctx.fillRect(barX, barY, barW * ratio, barH);
-                    ctx.strokeStyle = '#000';
-                    ctx.strokeRect(barX, barY, barW, barH);
-                }
             }
+            // --- 修正ここまで (元の else ブロックは削除) ---
         }
 
         // --- メインループ ---
