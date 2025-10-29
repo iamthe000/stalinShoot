@@ -467,7 +467,6 @@
         function selectDifficulty(difficulty) {
             currentDifficulty = difficulty;
             
-            // ▼▼▼ チート適用 ▼▼▼
             // チートフラグを一旦リセット
             isInvincible = false;
             hasPenetration = false;
@@ -481,7 +480,6 @@
                 noFallDefeat = true;
                 console.log("8月クーデター チート適用");
             }
-            // ▲▲▲ チート適用 ▲▲▲
 
             hideDifficultySelect();
             startGame();
@@ -505,7 +503,6 @@
                     }
                 }, 1500);
             }
-            // ▲▲▲ チートカウンター ▲▲▲
 
             if (isBgmPlaying) {
                 bgm.pause();
@@ -636,7 +633,7 @@
                 width: BULLET_WIDTH,
                 height: BULLET_HEIGHT,
                 // speed: BULLET_SPEED // 変更前
-                speed: fastShoot ? BULLET_SPEED * 3 : BULLET_SPEED // ▼ 変更後 (チート対応)
+                speed: fastShoot ? BULLET_SPEED * 3 : BULLET_SPEED //チート
             };
             bullets.push(bullet);
         }
@@ -742,11 +739,10 @@
                             enemies.splice(i, 1);
                         }
                         
-                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        //チート
                         if (!hasPenetration) {
                             break; 
                         }
-                        // ▲▲▲ 変更後 ▲▲▲
                     }
                 }
             }
@@ -835,63 +831,55 @@
                 const enemy = enemies[i];
                 enemy.y += enemy.speed;
                 if (enemy.y > CANVAS_HEIGHT) {
-                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
                     if (!noFallDefeat) {
                         gameOver("失敗！ 政策が露見した！");
                         return;
                     } else {
                         enemies.splice(i, 1); // チート時は消すだけ
                     }
-                    // ▲▲▲ 変更後 ▲▲▲
                 }
                 if (checkCollision(player, enemy)) {
-                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    //チート
                     if (!isInvincible) {
                         gameOver("失敗！ 責任を問われた！");
                         return;
                     }
-                    // ▲▲▲ 変更後 ▲▲▲
                 }
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
-                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        //チート
                         if (!hasPenetration) {
                             bullets.splice(j, 1);
                         }
-                        // ▲▲▲ 変更後 ▲▲▲
 
                         enemy.hp--;
                         if (enemy.hp <= 0) {
                             enemies.splice(i, 1);
                         }
                         
-                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
                         if (!hasPenetration) {
                             break;
                         }
-                        // ▲▲▲ 変更後 ▲▲▲
                     }
                 }
             }
 
             // ボスとプレイヤーの当たり判定
             if (checkCollision(player, boss)) {
-                // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                //チート
                 if (!isInvincible) {
                     gameOver("失敗！ 崩壊に巻き込まれた！");
                     return;
                 }
-                // ▲▲▲ 変更後 ▲▲▲
             }
 
             // ボスと弾の当たり判定
             for (let j = bullets.length - 1; j >= 0; j--) {
                 if (checkCollision(bullets[j], boss)) {
-                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    //チート
                     if (!hasPenetration) {
                         bullets.splice(j, 1);
                     }
-                    // ▲▲▲ 変更後 ▲▲▲
 
                     boss.hp--;
                     
@@ -902,11 +890,9 @@
                     }
                     scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
                     
-                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
                     if (!hasPenetration) {
                         break;
                     }
-                    // ▲▲▲ 変更後 ▲▲▲
                 }
             }
         }
@@ -937,7 +923,6 @@
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
             }
 
-            // --- ★修正箇所 ---
             // 雑魚敵の描画 (通常時もボスフェーズ時も実行)
             ctx.fillStyle = ENEMY_COLOR;
             ctx.font = ENEMY_FONT;
