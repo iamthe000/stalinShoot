@@ -179,12 +179,6 @@
         .difficulty-extreme:hover {
             background-color: #660044;
         }
-        
-        /* 難易度ボタン内のspanのスタイル（無敵モード表示用） */
-        .difficulty-button span {
-            font-size: 14px;
-            transition: color 0.3s;
-        }
 
         #start-button, #bgm-toggle, #back-button {
             font-size: 20px;
@@ -284,16 +278,16 @@
         <div id="difficulty-select">
             <h2>難易度を選択せよ</h2>
             <button class="difficulty-button difficulty-easy" data-difficulty="easy">
-                革命的難易度<br><span>（易しい - 敵の速度と数が控えめ）</span>
+                革命的難易度<br><span style="font-size: 14px;">（易しい - 敵の速度と数が控えめ）</span>
             </button>
             <button class="difficulty-button difficulty-normal" data-difficulty="normal">
-                大粛清的難易度<br><span>（普通 - バランスの取れた挑戦）</span>
+                大粛清的難易度<br><span style="font-size: 14px;">（普通 - バランスの取れた挑戦）</span>
             </button>
             <button class="difficulty-button difficulty-hard" data-difficulty="hard">
-                崩壊的難易度<br><span>（難しい - 激しい攻撃）</span>
+                崩壊的難易度<br><span style="font-size: 14px;">（難しい - 激しい攻撃）</span>
             </button>
             <button class="difficulty-button difficulty-extreme" data-difficulty="extreme">
-                8月クーデター的難易度<br><span>（超難 - 猛烈な攻撃）</span>
+                8月クーデター的難易度<br><span style="font-size: 14px;">（超難 - 猛烈な攻撃）</span>
             </button>
             <button id="back-button">戻る</button>
         </div>
@@ -388,14 +382,18 @@
         let isBgmPlaying = true;
         let currentDifficulty = 'normal';
 
-        // ★追加: 隠しコマンド用変数
-        let bgmToggleCount = 0;
-        let isInvincibleMode = false;
-        let gameIsInvincible = false;
-
         // --- スマホ操作用 ---
         let touchMode = 'none';
         let canvasRect;
+
+        // ▼▼▼ チート用追加 ▼▼▼
+        let bgmClickCount = 0;
+        let cheatEnabled = false;
+        let isInvincible = false;
+        let hasPenetration = false;
+        let fastShoot = false;
+        let noFallDefeat = false;
+        // ▲▲▲ チート用追加 ▲▲▲
 
         // --- DOM要素 ---
         const startButton = document.getElementById('start-button');
@@ -456,22 +454,9 @@
         };
 
         // --- 難易度選択画面表示 ---
-        // ★修正: 隠しコマンド変数をリセット
         function showDifficultySelect() {
             difficultySelect.style.display = 'block';
             startButton.style.display = 'none';
-
-            // 隠しコマンド関連リセット
-            bgmToggleCount = 0;
-            isInvincibleMode = false;
-            gameIsInvincible = false;
-            
-            // 8月クーデターボタンのテキストを元に戻す
-            const extremeButton = document.querySelector('.difficulty-extreme span');
-            if (extremeButton) {
-                extremeButton.textContent = '（超難 - 猛烈な攻撃）';
-                extremeButton.style.color = ''; // デフォルトの色に戻す
-            }
         }
 
         function hideDifficultySelect() {
@@ -479,29 +464,49 @@
             startButton.style.display = 'inline-block';
         }
 
-        // ★修正: 無敵モード判定を追加
         function selectDifficulty(difficulty) {
             currentDifficulty = difficulty;
             
-            // 無敵モード判定
-            if (isInvincibleMode && difficulty === 'extreme') {
-                gameIsInvincible = true;
-                console.log("無敵モードでゲーム開始！");
-            } else {
-                gameIsInvincible = false;
-            }
+            // ▼▼▼ チート適用 ▼▼▼
+            // チートフラグを一旦リセット
+            isInvincible = false;
+            hasPenetration = false;
+            fastShoot = false;
+            noFallDefeat = false;
 
-            // コマンド関連フラグをリセット
-            isInvincibleMode = false; 
-            bgmToggleCount = 0;
-            
+            if (cheatEnabled && difficulty === 'extreme') {
+                isInvincible = true;
+                hasPenetration = true;
+                fastShoot = true; // 弾速UPフラグ
+                noFallDefeat = true;
+                console.log("8月クーデター チート適用");
+            }
+            // ▲▲▲ チート適用 ▲▲▲
+
             hideDifficultySelect();
             startGame();
         }
 
         // --- BGM ON/OFF切り替え ---
-        // ★修正: 隠しコマンドのカウント処理を追加
         function toggleBGM() {
+            // ▼▼▼ チートカウンター ▼▼▼
+            bgmClickCount++;
+            if (bgmClickCount === 10) {
+                cheatEnabled = true;
+                console.log("隠しコマンド有効");
+                // ユーザーにチート有効を通知
+                overlay.textContent = "チート有効";
+                overlay.style.color = '#FFFF00'; // 目立つ色
+                overlay.style.display = 'block';
+                // 1.5秒後に非表示（ゲームが始まっていなければ）
+                setTimeout(() => {
+                    if (!gameRunning) {
+                        overlay.style.display = 'none';
+                    }
+                }, 1500);
+            }
+            // ▲▲▲ チートカウンター ▲▲▲
+
             if (isBgmPlaying) {
                 bgm.pause();
                 isBgmPlaying = false;
@@ -510,27 +515,6 @@
                 bgm.play().catch(e => console.error("BGM再生エラー:", e)); 
                 isBgmPlaying = true;
                 bgmToggle.textContent = 'BGM: ON';
-            }
-
-            // 隠しコマンド判定 (難易度選択画面表示中のみ)
-            if (difficultySelect.style.display === 'block') {
-                bgmToggleCount++;
-                console.log(`BGM Toggle Count: ${bgmToggleCount}`); // デバッグ用
-
-                if (bgmToggleCount === 10) {
-                    isInvincibleMode = true;
-                    console.log("隠しコマンド成功！");
-                    
-                    // ユーザーに通知
-                    const extremeButtonSpan = document.querySelector('.difficulty-extreme span');
-                    if (extremeButtonSpan) {
-                        extremeButtonSpan.textContent = '(無敵モードON)';
-                        extremeButtonSpan.style.color = '#FFFF00'; // 黄色で表示
-                    }
-                } else if (bgmToggleCount > 10) {
-                    // 10回を超えたらリセット（またはそのまま）
-                    // ここでは10回達成時のみフラグを立てる
-                }
             }
         }
 
@@ -542,7 +526,6 @@
                 width: PLAYER_WIDTH,
                 height: PLAYER_HEIGHT,
                 speed: PLAYER_SPEED
-                // gameIsInvincible はグローバル変数を使用
             };
             bullets = [];
             enemies = [];
@@ -652,7 +635,8 @@
                 y: player.y,
                 width: BULLET_WIDTH,
                 height: BULLET_HEIGHT,
-                speed: BULLET_SPEED
+                // speed: BULLET_SPEED // 変更前
+                speed: fastShoot ? BULLET_SPEED * 3 : BULLET_SPEED // ▼ 変更後 (チート対応)
             };
             bullets.push(bullet);
         }
@@ -720,7 +704,6 @@
             }
         }
 
-        // ★修正: 無敵判定を追加
         function updateEnemies(timestamp) {
             // 通常時の雑魚敵更新
             for (let i = enemies.length - 1; i >= 0; i--) {
@@ -728,24 +711,42 @@
                 enemy.y += enemy.speed;
 
                 if (enemy.y > CANVAS_HEIGHT) {
-                    gameOver("失敗！ 政策が露見した！");
-                    return;
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!noFallDefeat) {
+                        gameOver("失敗！ 政策が露見した！");
+                        return;
+                    } else {
+                        enemies.splice(i, 1); // チート時は消すだけ
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
                 }
-                
-                // ★無敵判定
-                if (!gameIsInvincible && checkCollision(player, enemy)) {
-                    gameOver("失敗！ 責任を問われた！");
-                    return;
+                if (checkCollision(player, enemy)) {
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!isInvincible) {
+                        gameOver("失敗！ 責任を問われた！");
+                        return;
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
                 }
-
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
-                        bullets.splice(j, 1);
+                        
+                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        if (!hasPenetration) {
+                            bullets.splice(j, 1);
+                        }
+                        // ▲▲▲ 変更後 ▲▲▲
+
                         enemy.hp--;
                         if (enemy.hp <= 0) {
                             enemies.splice(i, 1);
                         }
-                        break; 
+                        
+                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        if (!hasPenetration) {
+                            break; 
+                        }
+                        // ▲▲▲ 変更後 ▲▲▲
                     }
                 }
             }
@@ -799,7 +800,6 @@
             scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
         }
 
-        // ★修正: 無敵判定を追加
         function updateBoss() {
             if (!boss) return;
 
@@ -829,43 +829,70 @@
             }
 
             // ボスフェーズ中の雑魚敵（共和国離反）の更新処理
+            // updateEnemies() を流用すると通常時の敵生成ロジックが動いてしまうため、
+            // 雑魚敵の更新部分だけを別途実行する
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 enemy.y += enemy.speed;
                 if (enemy.y > CANVAS_HEIGHT) {
-                    gameOver("失敗！ 政策が露見した！");
-                    return;
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!noFallDefeat) {
+                        gameOver("失敗！ 政策が露見した！");
+                        return;
+                    } else {
+                        enemies.splice(i, 1); // チート時は消すだけ
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
                 }
-                
-                // ★無敵判定
-                if (!gameIsInvincible && checkCollision(player, enemy)) {
-                    gameOver("失敗！ 責任を問われた！");
-                    return;
+                if (checkCollision(player, enemy)) {
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!isInvincible) {
+                        gameOver("失敗！ 責任を問われた！");
+                        return;
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
                 }
-                
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
-                        bullets.splice(j, 1);
+                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        if (!hasPenetration) {
+                            bullets.splice(j, 1);
+                        }
+                        // ▲▲▲ 変更後 ▲▲▲
+
                         enemy.hp--;
                         if (enemy.hp <= 0) {
                             enemies.splice(i, 1);
                         }
-                        break;
+                        
+                        // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                        if (!hasPenetration) {
+                            break;
+                        }
+                        // ▲▲▲ 変更後 ▲▲▲
                     }
                 }
             }
 
             // ボスとプレイヤーの当たり判定
-            // ★無敵判定
-            if (!gameIsInvincible && checkCollision(player, boss)) {
-                gameOver("失敗！ 崩壊に巻き込まれた！");
-                return;
+            if (checkCollision(player, boss)) {
+                // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                if (!isInvincible) {
+                    gameOver("失敗！ 崩壊に巻き込まれた！");
+                    return;
+                }
+                // ▲▲▲ 変更後 ▲▲▲
             }
 
             // ボスと弾の当たり判定
             for (let j = bullets.length - 1; j >= 0; j--) {
                 if (checkCollision(bullets[j], boss)) {
-                    bullets.splice(j, 1);
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!hasPenetration) {
+                        bullets.splice(j, 1);
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
+
                     boss.hp--;
                     
                     if (boss.hp <= 0) {
@@ -874,7 +901,12 @@
                         return;
                     }
                     scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
-                    break;
+                    
+                    // ▼▼▼ 変更後 (チート対応) ▼▼▼
+                    if (!hasPenetration) {
+                        break;
+                    }
+                    // ▲▲▲ 変更後 ▲▲▲
                 }
             }
         }
@@ -887,33 +919,17 @@
         }
 
         // --- 描画処理 ---
-        // ★修正: 無敵モード中のプレイヤー描画（点滅）を追加
         function draw() {
             ctx.fillStyle = '#660000';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
             // プレイヤー描画
-            let drawPlayer = true;
-            if (gameIsInvincible && Math.floor(Date.now() / 150) % 2 === 0) {
-                 drawPlayer = false; // 無敵時点滅
+            if (playerImage.complete && playerImage.naturalWidth !== 0) {
+                ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+            } else {
+                ctx.fillStyle = 'silver';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
             }
-
-            if (drawPlayer) {
-                if (playerImage.complete && playerImage.naturalWidth !== 0) {
-                    ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
-                } else {
-                    // 画像がない場合の代替描画（無敵時は黄色、通常時銀色）
-                    ctx.fillStyle = gameIsInvincible ? '#FFFF00' : 'silver';
-                    ctx.fillRect(player.x, player.y, player.width, player.height);
-                }
-            } else if (!playerImage.complete || playerImage.naturalWidth === 0) {
-                // 画像がなく、点滅で非表示の場合の代替（背景色で塗りつぶし）
-                // ※画像がある場合は drawPlayer が false の時点で描画がスキップされる
-                // ※ただし、代替描画が黄色の場合、非表示にするために背景色で塗る必要はない
-                //    （drawPlayer=falseの時点で描画がスキップされるため）
-                //    このロジックは画像ありの場合と統一
-            }
-
 
             // 弾描画
             ctx.fillStyle = '#FFFF00';
@@ -921,6 +937,7 @@
                 ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
             }
 
+            // --- ★修正箇所 ---
             // 雑魚敵の描画 (通常時もボスフェーズ時も実行)
             ctx.fillStyle = ENEMY_COLOR;
             ctx.font = ENEMY_FONT;
@@ -960,6 +977,7 @@
                 ctx.strokeStyle = '#000';
                 ctx.strokeRect(bossBarX, bossBarY, bossBarW, bossBarH);
             }
+            // --- 修正ここまで (元の else ブロックは削除) ---
         }
 
         // --- メインループ ---
