@@ -179,6 +179,12 @@
         .difficulty-extreme:hover {
             background-color: #660044;
         }
+        
+        /* 難易度ボタン内のspanのスタイル（無敵モード表示用） */
+        .difficulty-button span {
+            font-size: 14px;
+            transition: color 0.3s;
+        }
 
         #start-button, #bgm-toggle, #back-button {
             font-size: 20px;
@@ -278,16 +284,16 @@
         <div id="difficulty-select">
             <h2>難易度を選択せよ</h2>
             <button class="difficulty-button difficulty-easy" data-difficulty="easy">
-                革命的難易度<br><span style="font-size: 14px;">（易しい - 敵の速度と数が控えめ）</span>
+                革命的難易度<br><span>（易しい - 敵の速度と数が控えめ）</span>
             </button>
             <button class="difficulty-button difficulty-normal" data-difficulty="normal">
-                大粛清的難易度<br><span style="font-size: 14px;">（普通 - バランスの取れた挑戦）</span>
+                大粛清的難易度<br><span>（普通 - バランスの取れた挑戦）</span>
             </button>
             <button class="difficulty-button difficulty-hard" data-difficulty="hard">
-                崩壊的難易度<br><span style="font-size: 14px;">（難しい - 激しい攻撃）</span>
+                崩壊的難易度<br><span>（難しい - 激しい攻撃）</span>
             </button>
             <button class="difficulty-button difficulty-extreme" data-difficulty="extreme">
-                8月クーデター的難易度<br><span style="font-size: 14px;">（超難 - 猛烈な攻撃）</span>
+                8月クーデター的難易度<br><span>（超難 - 猛烈な攻撃）</span>
             </button>
             <button id="back-button">戻る</button>
         </div>
@@ -382,12 +388,10 @@
         let isBgmPlaying = true;
         let currentDifficulty = 'normal';
 
-        // --- ★追加: オートプレイ・隠しコマンド用変数 ---
-        let isAutoPlay = false;
+        // ★追加: 隠しコマンド用変数
         let bgmToggleCount = 0;
-        let lastBgmToggleTime = 0;
-        let autoShootTimer = 0; // オートプレイ用射撃タイマー
-        const AUTO_SHOOT_INTERVAL = 100; // オートプレイ射撃間隔 (ms)
+        let isInvincibleMode = false;
+        let gameIsInvincible = false;
 
         // --- スマホ操作用 ---
         let touchMode = 'none';
@@ -442,10 +446,9 @@
             if (isMobile) {
                 shootButton.style.display = 'block';
                 
-                // ★修正: オートプレイ中は射撃ボタン無効
                 shootButton.addEventListener('touchstart', (e) => {
                     e.preventDefault();
-                    if (gameRunning && !isAutoPlay) shoot();
+                    if (gameRunning) shoot();
                 });
             } else {
                 shootButton.style.display = 'none';
@@ -453,13 +456,22 @@
         };
 
         // --- 難易度選択画面表示 ---
+        // ★修正: 隠しコマンド変数をリセット
         function showDifficultySelect() {
             difficultySelect.style.display = 'block';
             startButton.style.display = 'none';
-            // ★追加: 隠しコマンドカウントとオートプレイフラグをリセット
-            bgmToggleCount = 0; 
-            lastBgmToggleTime = 0;
-            isAutoPlay = false;
+
+            // 隠しコマンド関連リセット
+            bgmToggleCount = 0;
+            isInvincibleMode = false;
+            gameIsInvincible = false;
+            
+            // 8月クーデターボタンのテキストを元に戻す
+            const extremeButton = document.querySelector('.difficulty-extreme span');
+            if (extremeButton) {
+                extremeButton.textContent = '（超難 - 猛烈な攻撃）';
+                extremeButton.style.color = ''; // デフォルトの色に戻す
+            }
         }
 
         function hideDifficultySelect() {
@@ -467,15 +479,28 @@
             startButton.style.display = 'inline-block';
         }
 
+        // ★修正: 無敵モード判定を追加
         function selectDifficulty(difficulty) {
             currentDifficulty = difficulty;
+            
+            // 無敵モード判定
+            if (isInvincibleMode && difficulty === 'extreme') {
+                gameIsInvincible = true;
+                console.log("無敵モードでゲーム開始！");
+            } else {
+                gameIsInvincible = false;
+            }
+
+            // コマンド関連フラグをリセット
+            isInvincibleMode = false; 
+            bgmToggleCount = 0;
+            
             hideDifficultySelect();
-            // isAutoPlay フラグは startAutoPlay で設定されるか、
-            // showDifficultySelect でリセットされているので、ここでは触らない
             startGame();
         }
 
-        // --- BGM ON/OFF切り替え (★隠しコマンド判定追加) ---
+        // --- BGM ON/OFF切り替え ---
+        // ★修正: 隠しコマンドのカウント処理を追加
         function toggleBGM() {
             if (isBgmPlaying) {
                 bgm.pause();
@@ -486,44 +511,38 @@
                 isBgmPlaying = true;
                 bgmToggle.textContent = 'BGM: ON';
             }
-            
-            // --- ★追加: 隠しコマンド判定 ---
-            // 難易度選択画面が表示されている時のみカウント
+
+            // 隠しコマンド判定 (難易度選択画面表示中のみ)
             if (difficultySelect.style.display === 'block') {
-                const now = Date.now();
-                // 1.5秒以内の連打をカウント
-                if (now - lastBgmToggleTime < 1500) {
-                    bgmToggleCount++;
-                } else {
-                    bgmToggleCount = 1; // 1.5秒以上空いたらリセット
-                }
-                lastBgmToggleTime = now;
-                
-                // 10回に達したらオートプレイ開始
-                if (bgmToggleCount >= 10) {
-                    bgmToggleCount = 0; // カウントリセット
-                    startAutoPlay();
+                bgmToggleCount++;
+                console.log(`BGM Toggle Count: ${bgmToggleCount}`); // デバッグ用
+
+                if (bgmToggleCount === 10) {
+                    isInvincibleMode = true;
+                    console.log("隠しコマンド成功！");
+                    
+                    // ユーザーに通知
+                    const extremeButtonSpan = document.querySelector('.difficulty-extreme span');
+                    if (extremeButtonSpan) {
+                        extremeButtonSpan.textContent = '(無敵モードON)';
+                        extremeButtonSpan.style.color = '#FFFF00'; // 黄色で表示
+                    }
+                } else if (bgmToggleCount > 10) {
+                    // 10回を超えたらリセット（またはそのまま）
+                    // ここでは10回達成時のみフラグを立てる
                 }
             }
         }
 
-        // --- ★追加: オートプレイ開始 ---
-        function startAutoPlay() {
-            console.log("隠しコマンド発動！ オートプレイモード（最高難易度）を開始します。");
-            if (gameRunning) return; // すでにゲームが始まっていたら何もしない
-            isAutoPlay = true;
-            selectDifficulty('extreme'); // 最高難易度でゲーム開始
-        }
-
         // --- ゲーム開始 ---
         function startGame() {
-            // ★注意: ここでは isAutoPlay をリセットしない (startAutoPlay で true が設定されるため)
             player = {
                 x: (CANVAS_WIDTH - PLAYER_WIDTH) / 2,
                 y: CANVAS_HEIGHT - PLAYER_HEIGHT - 10,
                 width: PLAYER_WIDTH,
                 height: PLAYER_HEIGHT,
                 speed: PLAYER_SPEED
+                // gameIsInvincible はグローバル変数を使用
             };
             bullets = [];
             enemies = [];
@@ -562,8 +581,7 @@
         // --- キー入力ハンドラ ---
         function handleKeyDown(e) {
             keys[e.code] = true;
-            // ★修正: オートプレイ中はスペースでの射撃無効
-            if (e.code === 'Space' && gameRunning && !isAutoPlay) {
+            if (e.code === 'Space' && gameRunning) {
                 e.preventDefault();
                 shoot();
             }
@@ -585,8 +603,7 @@
         }
 
         function handleTouchStart(e) {
-            // ★修正: オートプレイ中はタッチ操作無効
-            if (!gameRunning || isAutoPlay) return;
+            if (!gameRunning) return;
             e.preventDefault();
             
             const touch = e.touches[0];
@@ -601,8 +618,7 @@
         }
 
         function handleTouchMove(e) {
-            // ★修正: オートプレイ中はタッチ操作無効
-            if (!gameRunning || touchMode !== 'move' || isAutoPlay) return;
+            if (!gameRunning || touchMode !== 'move') return;
             e.preventDefault();
             
             const touch = e.touches[0];
@@ -616,8 +632,7 @@
         }
 
         function handleTouchEnd(e) {
-            // ★修正: オートプレイ中はタッチ操作無効
-            if (!gameRunning || isAutoPlay) return;
+            if (!gameRunning) return;
             e.preventDefault();
             touchMode = 'none';
         }
@@ -674,23 +689,17 @@
         function update(timestamp) {
             if (!gameRunning) return;
 
-            // ★修正: オートプレイと手動操作を分岐
-            if (isAutoPlay) {
-                runAutoPlayLogic(timestamp); // オートプレイ実行
-            } else {
-                // プレイヤー移動 (キーボード)
-                if (keys['ArrowLeft'] || keys['KeyA']) {
-                    player.x -= player.speed;
-                    if (player.x < 0) player.x = 0;
-                }
-                if (keys['ArrowRight'] || keys['KeyD']) {
-                    player.x += player.speed;
-                    if (player.x > CANVAS_WIDTH - player.width) {
-                        player.x = CANVAS_WIDTH - player.width;
-                    }
+            // プレイヤー移動 (キーボード)
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                player.x -= player.speed;
+                if (player.x < 0) player.x = 0;
+            }
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                player.x += player.speed;
+                if (player.x > CANVAS_WIDTH - player.width) {
+                    player.x = CANVAS_WIDTH - player.width;
                 }
             }
-            // ★修正ここまで
 
             updateBullets();
 
@@ -711,6 +720,7 @@
             }
         }
 
+        // ★修正: 無敵判定を追加
         function updateEnemies(timestamp) {
             // 通常時の雑魚敵更新
             for (let i = enemies.length - 1; i >= 0; i--) {
@@ -721,10 +731,13 @@
                     gameOver("失敗！ 政策が露見した！");
                     return;
                 }
-                if (checkCollision(player, enemy)) {
+                
+                // ★無敵判定
+                if (!gameIsInvincible && checkCollision(player, enemy)) {
                     gameOver("失敗！ 責任を問われた！");
                     return;
                 }
+
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
                         bullets.splice(j, 1);
@@ -786,6 +799,7 @@
             scoreDisplay.textContent = `ボスHP: ${boss.hp}`;
         }
 
+        // ★修正: 無敵判定を追加
         function updateBoss() {
             if (!boss) return;
 
@@ -815,8 +829,6 @@
             }
 
             // ボスフェーズ中の雑魚敵（共和国離反）の更新処理
-            // updateEnemies() を流用すると通常時の敵生成ロジックが動いてしまうため、
-            // 雑魚敵の更新部分だけを別途実行する
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const enemy = enemies[i];
                 enemy.y += enemy.speed;
@@ -824,10 +836,13 @@
                     gameOver("失敗！ 政策が露見した！");
                     return;
                 }
-                if (checkCollision(player, enemy)) {
+                
+                // ★無敵判定
+                if (!gameIsInvincible && checkCollision(player, enemy)) {
                     gameOver("失敗！ 責任を問われた！");
                     return;
                 }
+                
                 for (let j = bullets.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[j], enemy)) {
                         bullets.splice(j, 1);
@@ -841,7 +856,8 @@
             }
 
             // ボスとプレイヤーの当たり判定
-            if (checkCollision(player, boss)) {
+            // ★無敵判定
+            if (!gameIsInvincible && checkCollision(player, boss)) {
                 gameOver("失敗！ 崩壊に巻き込まれた！");
                 return;
             }
@@ -870,136 +886,34 @@
                    rect1.y + rect1.height > rect2.y;
         }
 
-        // --- ★追加: オートプレイ実行ロジック ---
-        function runAutoPlayLogic(timestamp) {
-            
-            // --- 1. 回避ロジック (最も危険な敵から逃げる) ---
-            let closestDanger = null;
-            let minDangerDist = Infinity;
-            
-            // ボスと通常の敵をすべて回避対象にする
-            const allTargets = [...enemies];
-            if (bossPhase && boss) {
-                // ボスは当たり判定が大きいので、回避用の仮想ヒットボックスを広げる
-                 const bossHitbox = {
-                    ...boss,
-                    x: boss.x - PLAYER_WIDTH / 2, // 左右に少しマージン
-                    width: boss.width + PLAYER_WIDTH
-                 };
-                allTargets.push(bossHitbox);
-            }
-
-            for (const enemy of allTargets) {
-                // プレイヤーに近づいてきている敵のみを対象
-                // (画面の下半分に来たら危険とみなす)
-                if (enemy.y > CANVAS_HEIGHT * 0.5 && enemy.y < player.y + player.height) {
-                    
-                    const enemyCX = enemy.x + enemy.width / 2;
-                    const playerCX = player.x + player.width / 2;
-                    const dx = Math.abs(enemyCX - playerCX);
-                    const dy = player.y - (enemy.y + enemy.height); // 敵の下端とプレイヤーの上端の距離
-
-                    // プレイヤーの幅＋敵の幅の半分より近い ＝ 衝突コース
-                    const collisionThreshold = (player.width / 2) + (enemy.width / 2);
-
-                    // 衝突コース上で、かつY座標が近い敵を危険とみなす
-                    if (dx < collisionThreshold * 1.2 && dy < 150) { // 距離150以内、X軸が近い
-                         const dist = Math.sqrt(dx * dx + dy * dy);
-                         if (dist < minDangerDist) {
-                            minDangerDist = dist;
-                            closestDanger = enemy;
-                         }
-                    }
-                }
-            }
-
-            if (closestDanger) {
-                // --- 回避行動 ---
-                const dangerCX = closestDanger.x + closestDanger.width / 2;
-                const playerCX = player.x + player.width / 2;
-                
-                // 敵 (closestDanger) から逃げる
-                if (playerCX < dangerCX) {
-                    // 敵が右側にいる -> 左に逃げる
-                    player.x -= player.speed;
-                } else {
-                    // 敵が左側にいる -> 右に逃げる
-                    player.x += player.speed; 
-                }
-                
-                // 画面端に追い詰められたら反対側に逃げる (少しだけ)
-                if (player.x <= 0) player.x = player.speed;
-                if (player.x >= CANVAS_WIDTH - player.width) player.x = CANVAS_WIDTH - player.width - player.speed;
-
-            } else {
-                // --- 2. 攻撃ロジック (危険がない場合、最も狙うべき敵を狙う) ---
-                let bestTarget = null;
-                let minScore = Infinity; // Y座標が低い（近い）ほどスコアが低い（優先）
-
-                const attackTargets = [...enemies];
-                if (bossPhase && boss) attackTargets.push(boss);
-                
-                for (const target of attackTargets) {
-                    // Y座標が一番低い（一番プレイヤーに近い）敵を優先する
-                    const score = target.y; // Y座標が低いほど優先
-                    if (score < minScore) {
-                        minScore = score;
-                        bestTarget = target;
-                    }
-                }
-                
-                if (bestTarget) {
-                    // ターゲット (bestTarget) の真下に行く
-                    const targetCX = bestTarget.x + bestTarget.width / 2;
-                    const playerCX = player.x + player.width / 2;
-                    
-                    // ターゲットの真下 ± 5px の範囲に入ったら停止
-                    if (Math.abs(targetCX - playerCX) > 5) {
-                         if (playerCX < targetCX) {
-                            player.x += player.speed;
-                        } else {
-                            player.x -= player.speed;
-                        }
-                    }
-                } else {
-                    // 狙う敵がいない場合は中央に戻る
-                    const center = (CANVAS_WIDTH - player.width) / 2;
-                    if (Math.abs(player.x - center) > player.speed) {
-                        if (player.x < center) player.x += player.speed;
-                        else player.x -= player.speed;
-                    }
-                }
-            }
-
-            // 最終的な境界チェック
-            if (player.x < 0) player.x = 0;
-            if (player.x > CANVAS_WIDTH - player.width) {
-                player.x = CANVAS_WIDTH - player.width;
-            }
-
-            // --- 3. 自動射撃 ---
-            if (timestamp > autoShootTimer) {
-                // 画面内に敵かボスがいれば撃つ
-                if (enemies.length > 0 || (bossPhase && boss)) {
-                    shoot();
-                    autoShootTimer = timestamp + AUTO_SHOOT_INTERVAL;
-                }
-            }
-        }
-        // ★オートプレイロジックここまで
-
         // --- 描画処理 ---
+        // ★修正: 無敵モード中のプレイヤー描画（点滅）を追加
         function draw() {
             ctx.fillStyle = '#660000';
             ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
             // プレイヤー描画
-            if (playerImage.complete && playerImage.naturalWidth !== 0) {
-                ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
-            } else {
-                ctx.fillStyle = 'silver';
-                ctx.fillRect(player.x, player.y, player.width, player.height);
+            let drawPlayer = true;
+            if (gameIsInvincible && Math.floor(Date.now() / 150) % 2 === 0) {
+                 drawPlayer = false; // 無敵時点滅
             }
+
+            if (drawPlayer) {
+                if (playerImage.complete && playerImage.naturalWidth !== 0) {
+                    ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+                } else {
+                    // 画像がない場合の代替描画（無敵時は黄色、通常時銀色）
+                    ctx.fillStyle = gameIsInvincible ? '#FFFF00' : 'silver';
+                    ctx.fillRect(player.x, player.y, player.width, player.height);
+                }
+            } else if (!playerImage.complete || playerImage.naturalWidth === 0) {
+                // 画像がなく、点滅で非表示の場合の代替（背景色で塗りつぶし）
+                // ※画像がある場合は drawPlayer が false の時点で描画がスキップされる
+                // ※ただし、代替描画が黄色の場合、非表示にするために背景色で塗る必要はない
+                //    （drawPlayer=falseの時点で描画がスキップされるため）
+                //    このロジックは画像ありの場合と統一
+            }
+
 
             // 弾描画
             ctx.fillStyle = '#FFFF00';
@@ -1061,7 +975,6 @@
         // --- ゲームオーバー / クリア処理 ---
         function stopGame() {
             gameRunning = false;
-            isAutoPlay = false; // ★追加: オートプレイフラグをリセット
             cancelAnimationFrame(animationFrameId);
             bgm.pause();
             endBgm.currentTime = 0;
